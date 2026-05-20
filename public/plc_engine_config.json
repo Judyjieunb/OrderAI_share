@@ -1,0 +1,90 @@
+{
+  "version": "1.0",
+  "brands": {
+    "mlb": {
+      "brand_code": "mlb",
+      "brand_name": "MLB",
+      "store_count": 150,
+      "broken_coverage_ratio": 0.667,
+      "has_tax_free": true,
+      "scale_blend": 0.5,
+      "plc_exclude_prods": [
+        "3ATSB3054"
+      ],
+      "item_nm_map_path": "public/item_nm_map.json"
+    },
+    "discovery": {
+      "brand_code": "discovery",
+      "brand_name": "Discovery",
+      "store_count": 250,
+      "broken_coverage_ratio": 0.667,
+      "has_tax_free": true,
+      "scale_blend": 0.5,
+      "plc_exclude_prods": [],
+      "item_nm_map_path": "public/item_nm_map.json"
+    },
+    "duvetica": {
+      "brand_code": "duvetica",
+      "brand_name": "Duvetica",
+      "store_count": 30,
+      "broken_coverage_ratio": 0.667,
+      "has_tax_free": true,
+      "scale_blend": 0.5,
+      "plc_exclude_prods": [],
+      "item_nm_map_path": "public/item_nm_map.json"
+    },
+    "sergio": {
+      "brand_code": "sergio",
+      "brand_name": "Sergio Tacchini",
+      "store_count": 15,
+      "broken_coverage_ratio": 0.667,
+      "has_tax_free": true,
+      "scale_blend": 0.5,
+      "plc_exclude_prods": [],
+      "item_nm_map_path": "public/item_nm_map.json"
+    },
+    "mlbkids": {
+      "brand_code": "mlbkids",
+      "brand_name": "MLB KIDS",
+      "store_count": 130,
+      "broken_coverage_ratio": 0.667,
+      "has_tax_free": true,
+      "scale_blend": 0.5,
+      "plc_exclude_prods": [],
+      "item_nm_map_path": "public/item_nm_map.json"
+    }
+  },
+  "seasons": {
+    "25F": {
+      "season_code": "25F",
+      "season_type": "fw",
+      "seasons_for_plc": [
+        "23F",
+        "24F",
+        "25F"
+      ],
+      "fwo_range": [
+        1,
+        39
+      ],
+      "sale_col": "SC_SALE_QTY_TAX"
+    }
+  },
+  "engine_params": {
+    "default": {
+      "dtw_min_window": 4,
+      "dtw_warp_band": 2,
+      "dtw_shift_high": 6,
+      "dtw_shift_medium": 3,
+      "dtw_dist_high": 0.029,
+      "dtw_dist_medium": 0.085,
+      "min_sale_weeks": 4,
+      "min_cum_intake": 50,
+      "min_sc_for_plc": 5,
+      "dead_stock_weeks": 2,
+      "plc_tail_decay": 0.7
+    },
+    "mlb": {},
+    "discovery": {}
+  }
+}

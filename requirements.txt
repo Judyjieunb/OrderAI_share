@@ -1,0 +1,16 @@
+# order-ai-share — Python 의존성
+# 슬림화 1차: anthropic / openai / httpx 제거 (정적 분석 0 import 확인됨).
+# matplotlib / seaborn 은 scripts/main.py 가 차트 생성에 실사용 → 유지.
+
+pandas>=2.0.0
+openpyxl>=3.1.0
+matplotlib>=3.5.0
+seaborn>=0.12.0
+numpy>=1.21.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-dotenv>=1.0.0
+python-multipart>=0.0.9
+snowflake-connector-python>=3.6.0
+duckdb>=1.5.0,<2.0
+pytest>=7.0.0

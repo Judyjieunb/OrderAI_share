@@ -1,0 +1,57 @@
+{
+  "brand": "MLB",
+  "baseSeason": "25F",
+  "targetSeason": "26F",
+  "seasonType": "FW",
+  "startDate": {
+    "month": "09",
+    "day": "01"
+  },
+  "endDate": {
+    "month": "02",
+    "day": "28"
+  },
+  "targetSellThrough": 65,
+  "gradeThresholds": {
+    "S": 65,
+    "A": 55,
+    "B": 45,
+    "C": 35
+  },
+  "commercialStockoutThreshold": 50,
+  "subSeasonCutoff": {
+    "Spring": {
+      "month": "05",
+      "day": "15"
+    },
+    "Summer": {
+      "month": "06",
+      "day": "30"
+    },
+    "Fall": {
+      "month": "11",
+      "day": "15"
+    },
+    "Winter": {
+      "month": "12",
+      "day": "31"
+    }
+  },
+  "seasonEndByType": {
+    "FW": {
+      "month": "02",
+      "day": "28"
+    },
+    "SS": {
+      "month": "08",
+      "day": "31"
+    }
+  },
+  "highVolumeTargetSellThrough": 70,
+  "highVolumeTopPercent": 5,
+  "shortageThresholds": {
+    "minQty": 200,
+    "minRatio": 0.2,
+    "minAmt": 100000000
+  }
+}

@@ -1,0 +1,2 @@
+# scripts/run_all.py 실행 시 이 폴더에 order_ai.duckdb 생성
+# 실제 .duckdb 파일은 .gitignore 처리됨
