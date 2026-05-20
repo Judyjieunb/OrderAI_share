@@ -15,7 +15,7 @@
 | ☐ | Git 설치 확인 (`git --version`) | — |
 | ☐ | Claude Code 구독 active | 셀프 트러블슈팅 1순위 도구 |
 | ☐ | GitHub 본인 계정 → AX팀에 username 공유 | repo collaborator invite 받기용 |
-| ☐ | GitHub 초대 수락 + `git clone` 성공 | `git clone https://github.com/Judyjieunb/order-ai-share.git` |
+| ☐ | GitHub 초대 수락 + `git clone` 성공 | `git clone https://github.com/Judyjieunb/OrderAI_share.git` |
 | ☐ | `./setup.sh --skip-snowflake` 단독 실행 → `=== SETUP COMPLETE: PRE-MEETING ===` 확인 | venv + npm install 미리 |
 
 체크 끝나면 미팅 진입 준비 완료. 못 한 항목이 있으면 미팅에서 지원.

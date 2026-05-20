@@ -33,8 +33,8 @@ Windows 사용자는 WSL2 (Ubuntu) 사용 권장 — bash 기반 setup.sh 호환
 AX팀이 제공한 GitHub 초대 수락 후:
 
 ```bash
-git clone https://github.com/Judyjieunb/order-ai-share.git
-cd order-ai-share
+git clone https://github.com/Judyjieunb/OrderAI_share.git
+cd OrderAI_share
 ```
 
 ---
