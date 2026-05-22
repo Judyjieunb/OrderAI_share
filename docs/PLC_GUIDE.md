@@ -50,7 +50,7 @@ AI 발주량 예측의 기본 재료:
    RuntimeError: 최소 2 시즌의 weekly_raw 데이터 필요.
    AX팀에 seed PLC 요청하세요: ax-team@fnf.co.kr
    ```
-   → Cold-start 브랜드. SUPPORT.md "Cold-start 브랜드" 항목 참고.
+   → Cold-start 브랜드. 본 문서 "Cold-start 브랜드 대응" 항목 참고.
 3. PLC 추출 (lifecycle curve 학습)
 4. `data/plc/{brand}_{type}_plc_forecast_standard.csv` 출력 (예: `mlb_fw_*`, `discovery_ss_*`). brand 와 type 은 `.env::BRAND` + `brand_config.json::targetSeason` 으로 자동 도출. 실제 경로 확인: `python -c "import sys; sys.path.insert(0,'scripts'); from config_loader import get_plc_forecast_path; print(get_plc_forecast_path())"`.
 5. Coverage report 표시:
@@ -100,7 +100,7 @@ AI 발주량 예측의 기본 재료:
 
 본 브랜드의 weekly_raw 데이터가 <2 시즌:
 
-1. AX팀에 seed PLC 요청 (1회 한정 — SUPPORT.md 참고)
+1. AX팀에 seed PLC 요청 (1회 한정)
 2. AX팀이 유사 카테고리 분석 + manual 분석으로 seed `{brand}_{type}_plc_forecast_standard.csv` 생성
 3. 1Password share 또는 GPG 로 전달
 4. 본인이 `data/plc/{brand}_{type}_plc_forecast_standard.csv` (본인 환경의 brand/type) 에 배치

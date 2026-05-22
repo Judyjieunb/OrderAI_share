@@ -30,7 +30,7 @@
 |---|---|
 | ☐ | 운영자의 Pre-meeting 체크 결과 공유 |
 | ☐ | 본 fork 의 아키텍처 (Snowflake → DuckDB → API → UI) 5분 설명 |
-| ☐ | severance 정책 ([SUPPORT.md](../SUPPORT.md)) 확인 |
+| ☐ | severance 정책 (인계 후 사업부 자율 운영, AX팀 정기 patch 없음) 확인 |
 
 ### 5–10분: Snowflake 인증 모드 결정 + Credential 전달
 

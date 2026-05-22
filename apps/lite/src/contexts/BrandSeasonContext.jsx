@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useAuth } from './AuthContext'
-import { liteApi } from '../services/apiClient'
+import { createApiClient } from '../service/apiClient.js'
 
 const BrandSeasonContext = createContext({
   brand: '',
@@ -26,7 +26,9 @@ export function BrandSeasonProvider({ children }) {
     let canceled = false
     ;(async () => {
       try {
-        const { data } = await liteApi('/brands', { email: user.email, roles: user.role })
+        const api = createApiClient(user.email, '', '', user.role)
+        const res = await api.get('/api/brands')
+        const data = res.ok ? await res.json() : null
         if (canceled) return
         const list = data?.brands || []
         setBrands(list)
@@ -46,10 +48,9 @@ export function BrandSeasonProvider({ children }) {
     let canceled = false
     ;(async () => {
       try {
-        const { data } = await liteApi(
-          `/seasons?brand=${encodeURIComponent(brand)}`,
-          { email: user.email, roles: user.role },
-        )
+        const api = createApiClient(user.email, brand, '', user.role)
+        const res = await api.get('/api/seasons')
+        const data = res.ok ? await res.json() : null
         if (canceled) return
         const list = data?.seasons || []
         setSeasons(list)

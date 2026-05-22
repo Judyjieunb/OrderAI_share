@@ -324,8 +324,40 @@ RuntimeError: 최소 2 시즌의 weekly_raw 데이터 필요. AX팀에 seed PLC 
 
 ---
 
+## 사고 대응
+
+### Credential 유출 의심 (옵션 B 사용 시)
+
+1. 즉시 `.env` 의 `SNOWFLAKE_PASSWORD` 무효화 (Snowflake 콘솔)
+2. 새 service account 발급 요청 (1Password share 로 받음)
+
+### 코드 손상 (git reset 으로 되돌리기)
+
+```bash
+git status                # 현재 변경사항 확인
+git stash                 # 작업 중인 변경 안전 보관
+git reset --hard HEAD~1   # 직전 커밋으로 돌리기 (또는 특정 커밋)
+git stash pop             # 안전 보관한 변경 복원
+```
+
+### 데이터 손상 (DuckDB 재생성)
+
+```bash
+rm -f data/production/order_ai.duckdb
+.venv/bin/python scripts/run_all.py   # 6 step 자동 실행 → public/*.json + DuckDB 재생성
+```
+
+본인 사물함 reset (`data/user-storage/` 통째 또는 특정 시즌):
+
+```bash
+rm -rf data/user-storage/{brand}/{season}/   # 본인 책임
+```
+
+또는 UI 우상단 Reset 버튼 사용.
+
+---
+
 ## 다음 읽을 것
 
 - 코드 수정 / 커스터마이즈 → [`CLAUDE.md`](./CLAUDE.md)
 - PLC 관련 → [`docs/PLC_GUIDE.md`](./docs/PLC_GUIDE.md)
-- 지원 정책 → [`SUPPORT.md`](./SUPPORT.md)

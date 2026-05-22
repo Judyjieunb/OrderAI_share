@@ -68,6 +68,62 @@
         39
       ],
       "sale_col": "SC_SALE_QTY_TAX"
+    },
+    "25S": {
+      "season_code": "25S",
+      "season_type": "ss",
+      "seasons_for_plc": [
+        "23S",
+        "24S",
+        "25S"
+      ],
+      "fwo_range": [
+        1,
+        39
+      ],
+      "sale_col": "SC_SALE_QTY_TAX"
+    },
+    "26F": {
+      "season_code": "26F",
+      "season_type": "fw",
+      "seasons_for_plc": [
+        "24F",
+        "25F",
+        "26F"
+      ],
+      "fwo_range": [
+        1,
+        39
+      ],
+      "sale_col": "SC_SALE_QTY_TAX"
+    },
+    "26S": {
+      "season_code": "26S",
+      "season_type": "ss",
+      "seasons_for_plc": [
+        "24S",
+        "25S",
+        "26S"
+      ],
+      "fwo_range": [
+        1,
+        39
+      ],
+      "sale_col": "SC_SALE_QTY_TAX"
+    },
+    "27S": {
+      "season_code": "27S",
+      "season_type": "ss",
+      "seasons_for_plc": [
+        "25S",
+        "26S",
+        "27S"
+      ],
+      "fwo_range": [
+        1,
+        39
+      ],
+      "sale_col": "SC_SALE_QTY_TAX"
     }
   },
   "engine_params": {

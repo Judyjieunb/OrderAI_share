@@ -11,7 +11,7 @@
 | 누가 | 언제 | 왜 |
 |---|---|---|
 | **사업부 단일 운영자** | 차시즌 발주 직전 (시즌 마감 ~ 다음 시즌 발주 확정 사이) | AI 추천을 출발점으로 자체 판단을 더하기 위해 |
-| **AX팀** | 새 fork 인계 시 1회 + cold-start 브랜드 seed PLC 제공 시 | 본 fork 는 인계 후 **사업부 자율 운영** (severance) — 자세히 [`SUPPORT.md`](./SUPPORT.md) |
+| **AX팀** | 새 fork 인계 시 1회 + cold-start 브랜드 seed PLC 제공 시 | 본 fork 는 인계 후 **사업부 자율 운영** (severance) |
 
 ---
 
@@ -59,8 +59,7 @@ PLC csv 4개 (`data/plc/{brand}_{type}_plc_forecast_standard.csv`) 는 동봉됨
 
 1. **에러 메시지 + README.md / SETUP.md / 본 디렉토리 구조** 를 Claude Code 에 붙여넣고 도움 요청
 2. PLC 관련 의문 → [`docs/PLC_GUIDE.md`](./docs/PLC_GUIDE.md)
-3. 지원 정책 / AX팀 contact → [`SUPPORT.md`](./SUPPORT.md)
-4. Claude Code 의 가드레일 / 변경 가능 영역 → [`CLAUDE.md`](./CLAUDE.md)
+3. Claude Code 의 가드레일 / 변경 가능 영역 → [`CLAUDE.md`](./CLAUDE.md)
 
 ---
 
@@ -107,7 +106,7 @@ PLC csv 4개 (`data/plc/{brand}_{type}_plc_forecast_standard.csv`) 는 동봉됨
 
 ```
 order-ai-share/
-├── README.md, SETUP.md, SUPPORT.md, CLAUDE.md, TODO.md
+├── README.md, SETUP.md, CLAUDE.md
 ├── setup.sh, smoke_test.py, pytest.ini    ← 자가검증 하네스
 ├── Dockerfile/deploy 없음                  ← share 는 로컬 단일 운영
 │
@@ -155,20 +154,6 @@ cp .env.example .env
 
 `./setup.sh` PASS 보이면 위 Quick Start 로.
 
----
-
-## 책임 경계 (severance 정책)
-
-| 영역 | AX팀 보장 | 사업부 책임 |
-|---|---|---|
-| 1회 온보딩 미팅 + 본 코드 인계 | ✅ | — |
-| Cold-start 브랜드 seed PLC | ✅ (요청 시 1회) | — |
-| 본 디렉토리 수정 / 운영 | — | ✅ |
-| Snowflake credentials 관리 | IT 발급 | 사용자 보관 (`.env`) |
-| 사고/장애 대응 | — | ✅ |
-| 결과 검증 / 발주 의사결정 | — | ✅ |
-
-자세히 → [`SUPPORT.md`](./SUPPORT.md).
 
 ---
 
@@ -176,4 +161,3 @@ cp .env.example .env
 
 - 본 코드는 F&F 내부 자산. 외부 공유 금지.
 - `.env`, `data/`, `output/` 은 절대 git 커밋 X (`.gitignore` 확인).
-- Snowflake credentials 는 1Password share 1순위, GPG encrypted file 2순위로만 전달.
