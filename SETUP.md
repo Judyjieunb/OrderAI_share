@@ -315,6 +315,17 @@ RuntimeError: 최소 2 시즌의 weekly_raw 데이터 필요. AX팀에 seed PLC 
 
 → `run_all.py` 미실행. 먼저 파이프라인 돌리세요.
 
+### Step 5 dump 에서 컬럼 mismatch 에러
+
+→ `size_assortment` 테이블이 구 스키마(13컬럼)로 잔존. 보통 `dump_to_duckdb.py` 의 자동 마이그레이션 (`_ensure_size_assortment_schema`) 이 처리하지만 외부 도구로 만든 DB 등에서는 수동 reset 필요:
+
+```bash
+rm data/production/order_ai.duckdb
+.venv/bin/python scripts/run_all.py
+```
+
+데이터는 다음 dump 가 재생성하므로 손실 없음. 자세한 배경은 [`docs/STEP5_사이즈배분_운영가이드.md`](./docs/STEP5_사이즈배분_운영가이드.md) §11.1 참고.
+
 ### 동작이 이상한데 에러는 없음 (조용한 깨짐)
 
 가장 위험한 케이스. 의심할 것:

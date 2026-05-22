@@ -233,11 +233,17 @@ def query_order_recommendation(con, brand: str, season: str) -> dict:
 # ───────────── 사이즈 배분 ─────────────
 
 def query_size_assortment(con, brand: str, season: str) -> dict:
-    """size_assortment_data.json 형태로 reconstruct (salesData/prevData/colorMapping/meta)."""
+    """size_assortment_data.json 형태로 reconstruct.
+
+    반환: salesData / prevData / colorMapping / meta
+          + category_size_dist / category_sample_count / ref_meta (Phase 3-1 신규)
+    """
+    import json as _json
+
     rows = con.execute(
         """
         SELECT period, sex_nm, class2, cat_nm, sub_cat_nm, item, item_nm,
-               color_range, size_cd, order_qty, sale_qty
+               sesn_sub_nm, fit_info1, color_range, size_cd, order_qty, sale_qty
         FROM size_assortment WHERE brand_code=? AND season_code=?
         """,
         [brand.lower(), season.lower()],
@@ -245,11 +251,13 @@ def query_size_assortment(con, brand: str, season: str) -> dict:
 
     sales: list[dict] = []
     prev: list[dict] = []
-    for period, sex, c2, cat, scat, item, item_nm, crange, sz, oq, sq in rows:
+    for period, sex, c2, cat, scat, item, item_nm, sesn, fit, crange, sz, oq, sq in rows:
         record = {
             "SEX_NM": sex, "CLASS2": c2, "CAT_NM": cat, "SUB_CAT_NM": scat,
-            "ITEM": item, "ITEM_NM": item_nm, "COLOR_RANGE": crange,
-            "SIZE_CD": sz, "ORDER_QTY": oq, "SALE_QTY": sq, "time_period": period,
+            "ITEM": item, "ITEM_NM": item_nm,
+            "SESN_SUB_NM": sesn, "FIT_INFO1": fit,
+            "COLOR_RANGE": crange, "SIZE_CD": sz,
+            "ORDER_QTY": oq, "SALE_QTY": sq, "time_period": period,
         }
         (sales if period == "current" else prev).append(record)
 
@@ -271,13 +279,42 @@ def query_size_assortment(con, brand: str, season: str) -> dict:
     ).fetchone()
     base_season = base_season_row[0] if base_season_row else None
 
+    # Phase 3-1: 카테고리 분포 + ref_meta + size_order
+    meta_row = con.execute(
+        """
+        SELECT category_size_dist, category_sample_count, ref_meta, size_order
+        FROM size_assortment_meta WHERE brand_code=? AND season_code=?
+        """,
+        [brand.lower(), season.lower()],
+    ).fetchone()
+
+    def _parse(v):
+        if v is None:
+            return None
+        return _json.loads(v) if isinstance(v, str) else v
+
+    if meta_row:
+        category_size_dist = _parse(meta_row[0]) or {}
+        category_sample_count = _parse(meta_row[1]) or {}
+        ref_meta = _parse(meta_row[2]) or {}
+        size_order = _parse(meta_row[3]) or ["XS", "S", "M", "L", "XL", "XXL"]
+    else:
+        category_size_dist = {}
+        category_sample_count = {}
+        ref_meta = {}
+        size_order = ["XS", "S", "M", "L", "XL", "XXL"]
+
     return {
         "salesData": sales,
         "prevData": prev,
         "colorMapping": color_mapping,
         "meta": {
-            "sizeOrder": ["XS", "S", "M", "L", "XL", "XXL"],
+            "sizeOrder": size_order,
             "baseSeason": base_season,
-            "hierarchy": ["SEX_NM", "CLASS2", "CAT_NM", "SUB_CAT_NM", "ITEM", "ITEM_NM"],
+            "hierarchy": ["SEX_NM", "CLASS2", "CAT_NM", "SUB_CAT_NM", "ITEM", "ITEM_NM",
+                          "SESN_SUB_NM", "FIT_INFO1"],
         },
+        "category_size_dist": category_size_dist,
+        "category_sample_count": category_sample_count,
+        "ref_meta": ref_meta,
     }

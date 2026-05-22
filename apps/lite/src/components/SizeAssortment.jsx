@@ -7,6 +7,7 @@ import { Filter, Calculator, X, List, Package, Download, AlertTriangle } from 'l
 import { publicUrl } from '../utils/api.js';
 import ResetButton from './common/ResetButton.jsx';
 import { CHANGED_CELL_CLASS } from '../utils/highlight.js';
+import { computeSizeDistribution } from '../utils/sizeDistribution.js';
 
 const ITEM_CODE_MAP = {
   '니트가디건': 'KC', '니트풀오버': 'KP', '다운베스트': 'DV', '다운점퍼': 'DJ',
@@ -112,121 +113,55 @@ const sexFromStyleCd = (partCd) => {
 // ----------------------------------------------------------------------
 // Helper: Size Distribution Modal (Step 4 → 5 연동)
 // ----------------------------------------------------------------------
-const SizeDistributionModal = ({ isOpen, onClose, orders, salesData, prevData, colorMapping, sizeOrder }) => {
+const SizeDistributionModal = ({ isOpen, onClose, orders, salesData, prevData, colorMapping, sizeOrder, categoryDist, sampleCount, refMeta, refPartCdMap }) => {
   if (!isOpen || !orders) return null;
 
-  // color_cd[-3:] → colorMapping → COLOR_RANGE 매핑
+  // color_cd[-3:] → colorMapping → COLOR_RANGE 매핑 (UI 표시용)
   const getColorRange = (colorCd) => {
     if (!colorCd || colorCd === '-') return null;
-    const suffix = colorCd.replace(/^[0-9]+/, '');  // 숫자 접두사 제거 (50BKS → BKS)
+    const suffix = colorCd.replace(/^[0-9]+/, '');
     const match = colorMapping.find(m => m.컬러코드 === suffix);
     return match?.COLOR_RANGE || null;
   };
 
-  // 2개년 통합 사이즈 배분 계산
+  // 2개년 통합 사이즈 배분 데이터
   const allSalesData = [...salesData, ...prevData];
 
+  // 신규 스타일 → matchInput (ref_part_cd 통해 SESN_SUB/FIT 추정)
+  const buildMatchInput = (order) => {
+    const refPartCd = refPartCdMap?.[order.new_part_cd];
+    const refData = refPartCd ? (refMeta?.[refPartCd] || {}) : {};
+    return {
+      sex: sexFromStyleCd(order.new_part_cd),
+      class2: order.class2,
+      item: toItemCode(order.new_item_nm),
+      sesn: refData.SESN_SUB_NM || null,
+      fit: refData.FIT_INFO1 || null,
+      sizeRange: order.size_range || null,
+      confirmedQty: order.confirmed_qty || 0,
+    };
+  };
+
+  const ctx = {
+    allData: allSalesData,
+    sampleCount: sampleCount || {},
+    categoryDist: categoryDist || {},
+    sizeOrder,
+  };
+
+  // 통합 모듈 호출
   const computeDistribution = (order) => {
-    const { class2, new_item_nm, color_cd, confirmed_qty, size_range, new_part_cd } = order;
-    const colorRange = getColorRange(color_cd);
-    const itemCode = toItemCode(new_item_nm);
-    const sex = sexFromStyleCd(new_part_cd);
-
-    // size_range 파싱: "S,M,L,XL" → Set(['S','M','L','XL'])
-    const allowedSizes = size_range
-      ? new Set(size_range.split(/[,\/]/).map(s => s.trim()).filter(Boolean))
-      : null;
-
-    // 성별 필터: sex가 있으면 해당 성별 데이터 우선, 없으면 전체
-    const sexFiltered = sex
-      ? allSalesData.filter(d => d.SEX_NM === sex)
-      : allSalesData;
-    // 성별 필터 후 데이터가 없으면 전체 데이터로 폴백
-    const pool = sexFiltered.length > 0 ? sexFiltered : allSalesData;
-
-    // 폴백 계층 매칭 (ITEM 코드 기준)
-    let matched = [];
-    let matchLevel = '';
-
-    // Level 1: CLASS2 + ITEM + COLOR_RANGE
-    if (colorRange && itemCode) {
-      matched = pool.filter(d =>
-        d.CLASS2 === class2 && d.ITEM === itemCode && d.COLOR_RANGE === colorRange
-      );
-      if (matched.length > 0) matchLevel = 'L1';
-    }
-
-    // Level 2: CLASS2 + COLOR_RANGE
-    if (matched.length === 0 && colorRange) {
-      matched = pool.filter(d =>
-        d.CLASS2 === class2 && d.COLOR_RANGE === colorRange
-      );
-      if (matched.length > 0) matchLevel = 'L2';
-    }
-
-    // Level 3: CLASS2 + ITEM
-    if (matched.length === 0 && itemCode) {
-      matched = pool.filter(d =>
-        d.CLASS2 === class2 && d.ITEM === itemCode
-      );
-      if (matched.length > 0) matchLevel = 'L3';
-    }
-
-    // Level 4: CLASS2 전체
-    if (matched.length === 0) {
-      matched = pool.filter(d => d.CLASS2 === class2);
-      if (matched.length > 0) matchLevel = 'L4';
-    }
-
-    // 매칭 불가
-    if (matched.length === 0) {
-      return { colorRange, matchLevel: 'NONE', sexMatched: false, sizes: {}, warning: true };
-    }
-
-    // SIZE_CD별 SALE_QTY 합산
-    const sizeSales = {};
-    matched.forEach(d => {
-      // size_range 필터: 허용 사이즈만 집계
-      if (allowedSizes && !allowedSizes.has(d.SIZE_CD)) return;
-      sizeSales[d.SIZE_CD] = (sizeSales[d.SIZE_CD] || 0) + (d.SALE_QTY || 0);
-    });
-
-    // size_range 지정인데 실적 매칭 없는 사이즈 → 균등 배분 폴백
-    if (allowedSizes && Object.keys(sizeSales).length === 0) {
-      const sizes = [...allowedSizes];
-      const perSize = Math.floor(confirmed_qty / sizes.length);
-      const remainder = confirmed_qty - perSize * sizes.length;
-      const rawQtys = {};
-      const ratios = {};
-      sizes.forEach((s, i) => {
-        rawQtys[s] = perSize + (i === 0 ? remainder : 0);
-        ratios[s] = 1 / sizes.length;
-      });
-      return { colorRange, matchLevel, sexMatched: pool !== allSalesData, sizes: rawQtys, ratios, warning: false };
-    }
-
-    const totalSale = Object.values(sizeSales).reduce((s, v) => s + v, 0);
-    if (totalSale === 0) {
-      return { colorRange, matchLevel, sexMatched: pool !== allSalesData, sizes: {}, warning: true };
-    }
-
-    // 비중 계산 → 반올림 배분
-    const ratios = {};
-    const rawQtys = {};
-    for (const [size, sale] of Object.entries(sizeSales)) {
-      ratios[size] = sale / totalSale;
-      rawQtys[size] = Math.round(confirmed_qty * ratios[size]);
-    }
-
-    // 잔여분 보정 → 최대비중 사이즈
-    const allocated = Object.values(rawQtys).reduce((s, v) => s + v, 0);
-    const diff = confirmed_qty - allocated;
-    if (diff !== 0) {
-      const maxSize = Object.entries(ratios).reduce((a, b) => b[1] > a[1] ? b : a)[0];
-      rawQtys[maxSize] += diff;
-    }
-
-    return { colorRange, matchLevel, sexMatched: pool !== allSalesData, sizes: rawQtys, ratios, warning: false };
+    const matchInput = buildMatchInput(order);
+    const result = computeSizeDistribution(matchInput, ctx);
+    return {
+      colorRange: getColorRange(order.color_cd),
+      matchLevel: result.matchLevel,
+      matchLabel: result.matchLabel,
+      groupLabel: result.groupLabel,
+      sizes: result.sizes,
+      ratios: result.ratios,
+      warning: result.warning,
+    };
   };
 
   // 모든 주문에 대해 배분 계산
@@ -275,21 +210,17 @@ const SizeDistributionModal = ({ isOpen, onClose, orders, salesData, prevData, c
     XLSX.writeFile(wb, `${season}_사이즈배분.xlsx`);
   };
 
-  const matchBadge = (level, sexMatched) => {
+  const matchBadge = (level, label) => {
     const cls = {
       L1: 'bg-green-100 text-green-700',
-      L2: 'bg-yellow-100 text-yellow-700',
-      L3: 'bg-blue-100 text-blue-700',
+      L2: 'bg-lime-100 text-lime-700',
+      L3: 'bg-yellow-100 text-yellow-700',
       L4: 'bg-orange-100 text-orange-700',
+      L5: 'bg-amber-100 text-amber-700',
     }[level] || 'bg-red-100 text-red-700';
-    const base = {
-      L1: 'CLASS × ITEM × COLOR',
-      L2: 'CLASS × COLOR',
-      L3: 'CLASS × ITEM',
-      L4: 'CLASS',
-    }[level];
-    if (!base) return <span className={`px-1.5 py-0.5 text-[10px] font-medium ${cls} rounded flex items-center gap-0.5`}><AlertTriangle className="w-3 h-3" />불가</span>;
-    const label = sexMatched ? `SEX × ${base}` : base;
+    if (!level || level === 'NONE' || !label || label === '-') {
+      return <span className={`px-1.5 py-0.5 text-[10px] font-medium ${cls} rounded flex items-center gap-0.5`}><AlertTriangle className="w-3 h-3" />불가</span>;
+    }
     return <span className={`px-1.5 py-0.5 text-[10px] font-medium ${cls} rounded`}>{label}</span>;
   };
 
@@ -342,7 +273,7 @@ const SizeDistributionModal = ({ isOpen, onClose, orders, salesData, prevData, c
                     </>
                   ) : null}
                   <td className="px-2 py-2 font-mono text-gray-600">{d.color_cd}</td>
-                  <td className="px-2 py-2">{matchBadge(d.dist.matchLevel, d.dist.sexMatched)}</td>
+                  <td className="px-2 py-2">{matchBadge(d.dist.matchLevel, d.dist.matchLabel)}</td>
                   <td className="px-2 py-2 text-right font-bold text-gray-900">{d.confirmed_qty.toLocaleString()}</td>
                   {allSizes.map(s => {
                     const hasValue = d.dist.sizes[s] && d.dist.sizes[s] > 0;
@@ -386,6 +317,10 @@ export default function SizeAssortment() {
   );
   const [salesData, setSalesData] = useState([]);
   const [prevData, setPrevData] = useState([]);
+  const [categoryDist, setCategoryDist] = useState({});
+  const [sampleCount, setSampleCount] = useState({});
+  const [refMeta, setRefMeta] = useState({});
+  const [refPartCdMap, setRefPartCdMap] = useState({});
   const [meta, setMeta] = useState({});
   const [colorMapping, setColorMapping] = useState([]);
   const [dataSource, setDataSource] = useState('sample');
@@ -394,8 +329,9 @@ export default function SizeAssortment() {
   // Filters
   const [selSex, setSelSex] = useState('All');
   const [selClass, setSelClass] = useState('All');
-  const [selCat, setSelCat] = useState('All');
   const [selItemNm, setSelItemNm] = useState('All');
+  const [selSesnSub, setSelSesnSub] = useState('All');
+  const [selFitInfo, setSelFitInfo] = useState('All');
   const [selColorRanges, setSelColorRanges] = useState(new Set()); // empty = All
   const [showColorPicker, setShowColorPicker] = useState(false);
 
@@ -424,6 +360,23 @@ export default function SizeAssortment() {
         if (data.prevData?.length > 0) setPrevData(data.prevData);
         if (data.colorMapping?.length > 0) setColorMapping(data.colorMapping);
         if (data.meta) setMeta(data.meta);
+        if (data.category_size_dist) setCategoryDist(data.category_size_dist);
+        if (data.category_sample_count) setSampleCount(data.category_sample_count);
+        if (data.ref_meta) setRefMeta(data.ref_meta);
+      })
+      .catch(() => {});
+
+    // order_recommendation_data.json — new_part_cd → ref_part_cd 매핑
+    api.fetchFile('order_recommendation_data.json')
+      .then(data => {
+        if (!data?.recommendations) return;
+        const map = {};
+        for (const rec of data.recommendations) {
+          if (rec.new_part_cd && rec.ref_part_cd) {
+            map[rec.new_part_cd] = rec.ref_part_cd;
+          }
+        }
+        setRefPartCdMap(map);
       })
       .catch(() => {});
   }, [api]);
@@ -454,76 +407,37 @@ export default function SizeAssortment() {
       }
       const orders = data.orders;
 
-      // 배분 로직 (SizeDistributionModal과 동일)
-      const getColorRange = (colorCd) => {
-        if (!colorCd || colorCd === '-') return null;
-        const suffix = colorCd.replace(/^[0-9]+/, '');
-        const match = colorMapping.find(m => m.컬러코드 === suffix);
-        return match?.COLOR_RANGE || null;
-      };
+      // 통합 모듈 사용 (SizeDistributionModal과 동일 로직)
       const allSalesData = [...salesData, ...prevData];
       const sOrder = meta?.sizeOrder || ['XS','S','M','L','XL','XXL','2XL'];
 
-      const computeDist = (order) => {
-        const { class2, new_item_nm, color_cd, confirmed_qty, size_range, new_part_cd } = order;
-        const colorRange = getColorRange(color_cd);
-        const itemCode = toItemCode(new_item_nm);
-        const sex = sexFromStyleCd(new_part_cd);
-        const allowedSizes = size_range
-          ? new Set(size_range.split(/[,\/]/).map(s => s.trim()).filter(Boolean))
-          : null;
-        const sexFiltered = sex ? allSalesData.filter(d => d.SEX_NM === sex) : allSalesData;
-        const pool = sexFiltered.length > 0 ? sexFiltered : allSalesData;
-        let matched = [], matchLevel = '';
-
-        if (colorRange && itemCode) {
-          matched = pool.filter(d => d.CLASS2 === class2 && d.ITEM === itemCode && d.COLOR_RANGE === colorRange);
-          if (matched.length > 0) matchLevel = 'L1';
-        }
-        if (!matched.length && colorRange) {
-          matched = pool.filter(d => d.CLASS2 === class2 && d.COLOR_RANGE === colorRange);
-          if (matched.length > 0) matchLevel = 'L2';
-        }
-        if (!matched.length && itemCode) {
-          matched = pool.filter(d => d.CLASS2 === class2 && d.ITEM === itemCode);
-          if (matched.length > 0) matchLevel = 'L3';
-        }
-        if (!matched.length) {
-          matched = pool.filter(d => d.CLASS2 === class2);
-          if (matched.length > 0) matchLevel = 'L4';
-        }
-        if (!matched.length) return { sizes: {}, matchLevel: 'NONE' };
-
-        const sizeSales = {};
-        matched.forEach(d => {
-          if (allowedSizes && !allowedSizes.has(d.SIZE_CD)) return;
-          sizeSales[d.SIZE_CD] = (sizeSales[d.SIZE_CD] || 0) + (d.SALE_QTY || 0);
-        });
-        // size_range 지정인데 실적 매칭 없는 사이즈 → 균등 배분 폴백
-        if (allowedSizes && Object.keys(sizeSales).length === 0) {
-          const sizes = [...allowedSizes];
-          const perSize = Math.floor(confirmed_qty / sizes.length);
-          const remainder = confirmed_qty - perSize * sizes.length;
-          const rawQtys = {};
-          sizes.forEach((s, i) => { rawQtys[s] = perSize + (i === 0 ? remainder : 0); });
-          return { sizes: rawQtys, matchLevel };
-        }
-        const totalSale = Object.values(sizeSales).reduce((s, v) => s + v, 0);
-        if (totalSale === 0) return { sizes: {}, matchLevel };
-
-        const rawQtys = {};
-        let maxRatio = 0, maxSize = '';
-        for (const [size, sale] of Object.entries(sizeSales)) {
-          const ratio = sale / totalSale;
-          rawQtys[size] = Math.round(confirmed_qty * ratio);
-          if (ratio > maxRatio) { maxRatio = ratio; maxSize = size; }
-        }
-        const diff = confirmed_qty - Object.values(rawQtys).reduce((s, v) => s + v, 0);
-        if (diff !== 0 && maxSize) rawQtys[maxSize] += diff;
-        return { sizes: rawQtys, matchLevel };
+      const ctx = {
+        allData: allSalesData,
+        sampleCount: sampleCount || {},
+        categoryDist: categoryDist || {},
+        sizeOrder: sOrder,
+      };
+      const buildMatchInput = (order) => {
+        const refPartCd = refPartCdMap?.[order.new_part_cd];
+        const refData = refPartCd ? (refMeta?.[refPartCd] || {}) : {};
+        return {
+          sex: sexFromStyleCd(order.new_part_cd),
+          class2: order.class2,
+          item: toItemCode(order.new_item_nm),
+          sesn: refData.SESN_SUB_NM || null,
+          fit: refData.FIT_INFO1 || null,
+          sizeRange: order.size_range || null,
+          confirmedQty: order.confirmed_qty || 0,
+        };
       };
 
-      const distributions = orders.map(o => ({ ...o, dist: computeDist(o) }));
+      const distributions = orders.map(o => {
+        const result = computeSizeDistribution(buildMatchInput(o), ctx);
+        return {
+          ...o,
+          dist: { sizes: result.sizes, matchLevel: result.matchLevel, matchLabel: result.matchLabel },
+        };
+      });
       const allSizes = [...new Set(distributions.flatMap(d => Object.keys(d.dist.sizes)))];
       const sizeIdx = (s) => { const i = sOrder.indexOf(s); return i >= 0 ? i : 999; };
       allSizes.sort((a, b) => sizeIdx(a) - sizeIdx(b));
@@ -557,8 +471,9 @@ export default function SizeAssortment() {
     let d = data;
     if (selSex !== 'All') d = d.filter(r => r.SEX_NM === selSex);
     if (selClass !== 'All') d = d.filter(r => r.CLASS2 === selClass);
-    if (selCat !== 'All') d = d.filter(r => r.CAT_NM === selCat);
     if (selItemNm !== 'All') d = d.filter(r => r.ITEM_NM === selItemNm);
+    if (selSesnSub !== 'All') d = d.filter(r => r.SESN_SUB_NM === selSesnSub);
+    if (selFitInfo !== 'All') d = d.filter(r => r.FIT_INFO1 === selFitInfo);
     if (selColorRanges.size > 0) d = d.filter(r => selColorRanges.has(r.COLOR_RANGE));
     return d;
   };
@@ -573,35 +488,46 @@ export default function SizeAssortment() {
     return ['All', ...new Set(d.map(r => r.CLASS2))];
   }, [allData, selSex]);
 
-  const catOptions = useMemo(() => {
-    let d = allData;
-    if (selSex !== 'All') d = d.filter(r => r.SEX_NM === selSex);
-    if (selClass !== 'All') d = d.filter(r => r.CLASS2 === selClass);
-    return ['All', ...new Set(d.map(r => r.CAT_NM))];
-  }, [allData, selSex, selClass]);
-
   const itemNmOptions = useMemo(() => {
     let d = allData;
     if (selSex !== 'All') d = d.filter(r => r.SEX_NM === selSex);
     if (selClass !== 'All') d = d.filter(r => r.CLASS2 === selClass);
-    if (selCat !== 'All') d = d.filter(r => r.CAT_NM === selCat);
     return ['All', ...new Set(d.map(r => r.ITEM_NM).filter(Boolean))];
-  }, [allData, selSex, selClass, selCat]);
+  }, [allData, selSex, selClass]);
+
+  const sesnSubOptions = useMemo(() => {
+    let d = allData;
+    if (selSex !== 'All') d = d.filter(r => r.SEX_NM === selSex);
+    if (selClass !== 'All') d = d.filter(r => r.CLASS2 === selClass);
+    if (selItemNm !== 'All') d = d.filter(r => r.ITEM_NM === selItemNm);
+    return ['All', ...new Set(d.map(r => r.SESN_SUB_NM).filter(Boolean))];
+  }, [allData, selSex, selClass, selItemNm]);
+
+  const fitInfoOptions = useMemo(() => {
+    let d = allData;
+    if (selSex !== 'All') d = d.filter(r => r.SEX_NM === selSex);
+    if (selClass !== 'All') d = d.filter(r => r.CLASS2 === selClass);
+    if (selItemNm !== 'All') d = d.filter(r => r.ITEM_NM === selItemNm);
+    if (selSesnSub !== 'All') d = d.filter(r => r.SESN_SUB_NM === selSesnSub);
+    return ['All', ...new Set(d.map(r => r.FIT_INFO1).filter(Boolean))];
+  }, [allData, selSex, selClass, selItemNm, selSesnSub]);
 
   const colorRangeOptions = useMemo(() => {
     let d = allData;
     if (selSex !== 'All') d = d.filter(r => r.SEX_NM === selSex);
     if (selClass !== 'All') d = d.filter(r => r.CLASS2 === selClass);
-    if (selCat !== 'All') d = d.filter(r => r.CAT_NM === selCat);
     if (selItemNm !== 'All') d = d.filter(r => r.ITEM_NM === selItemNm);
+    if (selSesnSub !== 'All') d = d.filter(r => r.SESN_SUB_NM === selSesnSub);
+    if (selFitInfo !== 'All') d = d.filter(r => r.FIT_INFO1 === selFitInfo);
     return ['All', ...new Set(d.map(r => r.COLOR_RANGE).filter(Boolean))].sort();
-  }, [allData, selSex, selClass, selCat, selItemNm]);
+  }, [allData, selSex, selClass, selItemNm, selSesnSub, selFitInfo]);
 
   // Reset child filters on parent change
-  const handleSexChange = (v) => { setSelSex(v); setSelClass('All'); setSelCat('All'); setSelItemNm('All'); setSelColorRanges(new Set()); };
-  const handleClassChange = (v) => { setSelClass(v); setSelCat('All'); setSelItemNm('All'); setSelColorRanges(new Set()); };
-  const handleCatChange = (v) => { setSelCat(v); setSelItemNm('All'); setSelColorRanges(new Set()); };
-  const handleItemNmChange = (v) => { setSelItemNm(v); setSelColorRanges(new Set()); };
+  const handleSexChange = (v) => { setSelSex(v); setSelClass('All'); setSelItemNm('All'); setSelSesnSub('All'); setSelFitInfo('All'); setSelColorRanges(new Set()); };
+  const handleClassChange = (v) => { setSelClass(v); setSelItemNm('All'); setSelSesnSub('All'); setSelFitInfo('All'); setSelColorRanges(new Set()); };
+  const handleItemNmChange = (v) => { setSelItemNm(v); setSelSesnSub('All'); setSelFitInfo('All'); setSelColorRanges(new Set()); };
+  const handleSesnSubChange = (v) => { setSelSesnSub(v); setSelFitInfo('All'); setSelColorRanges(new Set()); };
+  const handleFitInfoChange = (v) => { setSelFitInfo(v); setSelColorRanges(new Set()); };
 
   // Size order helper
   const sizeOrder = meta.sizeOrder || ['XS','S','M','L','XL','XXL','2XL'];
@@ -701,7 +627,7 @@ export default function SizeAssortment() {
     });
 
     return { chartData: data, topSize: maxSize ? { size: maxSize, share: maxShare } : null };
-  }, [salesData, prevData, selSex, selClass, selCat, selItemNm, selColorRanges, isSimMode, excludedSizes, mirrorPrev, sizeOrder]);
+  }, [salesData, prevData, selSex, selClass, selItemNm, selSesnSub, selFitInfo, selColorRanges, isSimMode, excludedSizes, mirrorPrev, sizeOrder]);
 
   // Order allocation: 총수량 → 비중별 5단위 배분
   const allocatedOrders = useMemo(() => {
@@ -761,7 +687,7 @@ export default function SizeAssortment() {
 
   const barConfig = getBarConfig();
 
-  const filterLabels = { SEX_NM: '성별', CLASS2: '복종', CAT_NM: '카테고리', ITEM_NM: '아이템명' };
+  const filterLabels = { SEX_NM: '성별', CLASS2: '복종', ITEM_NM: '아이템명', SESN_SUB_NM: '서브시즌', FIT_INFO1: '핏정보' };
 
   return (
     <>
@@ -774,6 +700,10 @@ export default function SizeAssortment() {
         prevData={prevData}
         colorMapping={colorMapping}
         sizeOrder={sizeOrder}
+        categoryDist={categoryDist}
+        sampleCount={sampleCount}
+        refMeta={refMeta}
+        refPartCdMap={refPartCdMap}
       />
 
       {/* Lite 전용: 본인 사이즈 배분 리셋 */}
@@ -832,15 +762,21 @@ export default function SizeAssortment() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{filterLabels.CAT_NM}</label>
-                <select value={selCat} onChange={e => handleCatChange(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg">
-                  {catOptions.map(o => <option key={o} value={o}>{o === 'All' ? '전체' : o}</option>)}
-                </select>
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{filterLabels.ITEM_NM}</label>
                 <select value={selItemNm} onChange={e => handleItemNmChange(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg">
                   {itemNmOptions.map(o => <option key={o} value={o}>{o === 'All' ? '전체' : o}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{filterLabels.SESN_SUB_NM}</label>
+                <select value={selSesnSub} onChange={e => handleSesnSubChange(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg">
+                  {sesnSubOptions.map(o => <option key={o} value={o}>{o === 'All' ? '전체' : o}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{filterLabels.FIT_INFO1}</label>
+                <select value={selFitInfo} onChange={e => handleFitInfoChange(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg">
+                  {fitInfoOptions.map(o => <option key={o} value={o}>{o === 'All' ? '전체' : o}</option>)}
                 </select>
               </div>
             </div>

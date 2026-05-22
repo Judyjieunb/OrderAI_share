@@ -37,6 +37,8 @@ SELECT
     p.SUB_CAT_NM,
     p.ITEM,
     p.ITEM_NM,
+    p.FIT_INFO1,
+    p.SESN_SUB_NM,
     w.PART_CD,
     w.COLOR_CD,
     w.SIZE_CD,
@@ -58,6 +60,8 @@ GROUP BY
     p.SUB_CAT_NM,
     p.ITEM,
     p.ITEM_NM,
+    p.FIT_INFO1,
+    p.SESN_SUB_NM,
     w.PART_CD,
     w.COLOR_CD,
     w.SIZE_CD

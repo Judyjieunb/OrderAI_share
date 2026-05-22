@@ -20,8 +20,19 @@ OUTPUT_PATH = os.path.join(
     'public', 'size_assortment_data.json'
 )
 
-HIERARCHY = ['SEX_NM', 'CLASS2', 'CAT_NM', 'SUB_CAT_NM', 'ITEM', 'ITEM_NM']
+HIERARCHY = ['SEX_NM', 'CLASS2', 'CAT_NM', 'SUB_CAT_NM', 'ITEM', 'ITEM_NM', 'SESN_SUB_NM', 'FIT_INFO1']
 SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL']
+
+# 카테고리 사이즈 분포 폴백 체인 (docs/STEP5_사이즈배분_운영가이드.md §8.2)
+# L1: 가장 정밀 (FIT 포함) — FIT_INFO1 Null이면 키 제외
+# L5: 최후 폴백 (CLASS2만)
+CATEGORY_DIST_LEVELS = [
+    ('by_l1', ['SEX_NM', 'CLASS2', 'ITEM', 'SESN_SUB_NM', 'FIT_INFO1']),
+    ('by_l2', ['SEX_NM', 'CLASS2', 'ITEM', 'SESN_SUB_NM']),
+    ('by_l3', ['SEX_NM', 'CLASS2', 'ITEM']),
+    ('by_l4', ['SEX_NM', 'CLASS2']),
+    ('by_l5', ['CLASS2']),
+]
 
 # 브랜드별 사이즈 체계가 달라서 하드코딩 불가 — 데이터 기반 자동 정렬
 _SIZE_LETTER_ORDER = {'XS': 0, 'S': 1, 'M': 2, 'L': 3, 'XL': 4, 'XXL': 5, '2XL': 5, '3XL': 6}
@@ -36,23 +47,31 @@ def _size_sort_key(s):
 # 실데이터 없을 때 폴백용 의류 샘플
 SAMPLE_SALES = [
     {"SEX_NM": "공용", "CLASS2": "Outer", "CAT_NM": "패딩", "SUB_CAT_NM": "숏패딩", "ITEM": "PD", "ITEM_NM": "패딩",
+     "SESN_SUB_NM": "Winter", "FIT_INFO1": "Regular",
      "COLOR_RANGE": "BLACK", "SIZE_CD": "M", "ORDER_QTY": 1200, "SALE_QTY": 890, "period": "당해"},
     {"SEX_NM": "공용", "CLASS2": "Outer", "CAT_NM": "패딩", "SUB_CAT_NM": "숏패딩", "ITEM": "PD", "ITEM_NM": "패딩",
+     "SESN_SUB_NM": "Winter", "FIT_INFO1": "Regular",
      "COLOR_RANGE": "BLACK", "SIZE_CD": "L", "ORDER_QTY": 1500, "SALE_QTY": 1100, "period": "당해"},
     {"SEX_NM": "공용", "CLASS2": "Outer", "CAT_NM": "패딩", "SUB_CAT_NM": "숏패딩", "ITEM": "PD", "ITEM_NM": "패딩",
+     "SESN_SUB_NM": "Winter", "FIT_INFO1": "Regular",
      "COLOR_RANGE": "WHITE", "SIZE_CD": "M", "ORDER_QTY": 800, "SALE_QTY": 550, "period": "당해"},
     {"SEX_NM": "공용", "CLASS2": "Inner", "CAT_NM": "맨투맨", "SUB_CAT_NM": "맨투맨", "ITEM": "MT", "ITEM_NM": "맨투맨",
+     "SESN_SUB_NM": "Fall", "FIT_INFO1": "Over",
      "COLOR_RANGE": "GRAY", "SIZE_CD": "M", "ORDER_QTY": 800, "SALE_QTY": 600, "period": "당해"},
     {"SEX_NM": "공용", "CLASS2": "Inner", "CAT_NM": "맨투맨", "SUB_CAT_NM": "맨투맨", "ITEM": "MT", "ITEM_NM": "맨투맨",
+     "SESN_SUB_NM": "Fall", "FIT_INFO1": "Over",
      "COLOR_RANGE": "GRAY", "SIZE_CD": "L", "ORDER_QTY": 900, "SALE_QTY": 700, "period": "당해"},
 ]
 
 SAMPLE_PREV = [
     {"SEX_NM": "공용", "CLASS2": "Outer", "CAT_NM": "패딩", "SUB_CAT_NM": "숏패딩", "ITEM": "PD", "ITEM_NM": "패딩",
+     "SESN_SUB_NM": "Winter", "FIT_INFO1": "Regular",
      "COLOR_RANGE": "BLACK", "SIZE_CD": "M", "ORDER_QTY": 1100, "SALE_QTY": 800, "period": "전년"},
     {"SEX_NM": "공용", "CLASS2": "Outer", "CAT_NM": "패딩", "SUB_CAT_NM": "숏패딩", "ITEM": "PD", "ITEM_NM": "패딩",
+     "SESN_SUB_NM": "Winter", "FIT_INFO1": "Regular",
      "COLOR_RANGE": "BLACK", "SIZE_CD": "L", "ORDER_QTY": 1400, "SALE_QTY": 1000, "period": "전년"},
     {"SEX_NM": "공용", "CLASS2": "Outer", "CAT_NM": "패딩", "SUB_CAT_NM": "숏패딩", "ITEM": "PD", "ITEM_NM": "패딩",
+     "SESN_SUB_NM": "Winter", "FIT_INFO1": "Regular",
      "COLOR_RANGE": "WHITE", "SIZE_CD": "M", "ORDER_QTY": 700, "SALE_QTY": 480, "period": "전년"},
 ]
 
@@ -95,12 +114,90 @@ def _load_color_mapping():
 def _aggregate(df):
     """계층+컬러레인지+사이즈별 집계 후 판매 0 제거"""
     group_cols = HIERARCHY + ['COLOR_RANGE', 'SIZE_CD']
-    agg = df.groupby(group_cols, as_index=False).agg(
+    agg = df.groupby(group_cols, as_index=False, dropna=False).agg(
         ORDER_QTY=('ORDER_QTY_KR', 'sum'),
         SALE_QTY=('SALE_QTY_KR', 'sum'),
     )
     agg = agg[agg['SALE_QTY'] > 0].copy()
     return agg
+
+
+def _build_ref_meta(df):
+    """PART_CD → {SESN_SUB_NM, FIT_INFO1} 메타 매핑 (정책 3 ref 폴백용).
+
+    각 PART_CD가 갖는 메타 정보를 lookup용으로 추출.
+    동일 PART_CD에 여러 행이 있으면 첫 번째 값 사용 (보통 일관됨).
+    """
+    if 'PART_CD' not in df.columns:
+        return {}
+    cols = ['PART_CD', 'SESN_SUB_NM', 'FIT_INFO1']
+    avail = [c for c in cols if c in df.columns]
+    if 'PART_CD' not in avail:
+        return {}
+    meta_df = df[avail].drop_duplicates('PART_CD')
+    ref_meta = {}
+    for _, row in meta_df.iterrows():
+        pc = row.get('PART_CD')
+        if not pc or pd.isna(pc):
+            continue
+        entry = {}
+        if 'SESN_SUB_NM' in avail:
+            v = row.get('SESN_SUB_NM')
+            entry['SESN_SUB_NM'] = None if pd.isna(v) else str(v)
+        if 'FIT_INFO1' in avail:
+            v = row.get('FIT_INFO1')
+            entry['FIT_INFO1'] = None if pd.isna(v) else str(v)
+        ref_meta[str(pc)] = entry
+    return ref_meta
+
+
+def _compute_category_size_dist(df):
+    """L1~L5 단위 사이즈 비중 + SC 카운트 사전 집계 (정책 3 빈자리 채우기용).
+
+    Returns:
+        (dist, counts): 각 Level별 그룹 라벨 → 사이즈 비중 dict / SC 카운트
+        - Null 키 그룹은 제외 (FIT_INFO1 Null 처리 — §8.3)
+        - 비중은 4자리 소수 (round 0.0000)
+    """
+    dist = {}
+    counts = {}
+
+    # SC 카운트용 unique 추출 (PART_CD 기준)
+    sc_key_cols = list({c for _, keys in CATEGORY_DIST_LEVELS for c in keys} | {'PART_CD'})
+    sc_df = df[sc_key_cols].drop_duplicates()
+
+    for level_key, group_keys in CATEGORY_DIST_LEVELS:
+        # ── 사이즈 비중 ──────────────────────────────
+        size_agg = df.groupby(group_keys + ['SIZE_CD'], dropna=False, as_index=False)['SALE_QTY_KR'].sum()
+        size_agg = size_agg[size_agg['SALE_QTY_KR'] > 0]
+
+        level_dist = {}
+        for group_vals, sub in size_agg.groupby(group_keys, dropna=False):
+            vals = group_vals if isinstance(group_vals, tuple) else (group_vals,)
+            if any(pd.isna(v) for v in vals):
+                continue  # Null 키 그룹 제외
+            group_label = '|'.join(str(v) for v in vals)
+            total = sub['SALE_QTY_KR'].sum()
+            if total > 0:
+                level_dist[group_label] = {
+                    str(row['SIZE_CD']): round(float(row['SALE_QTY_KR'] / total), 4)
+                    for _, row in sub.iterrows()
+                }
+
+        # ── SC 카운트 ────────────────────────────────
+        sc_counts = sc_df.groupby(group_keys, dropna=False).size()
+        level_counts = {}
+        for group_vals, cnt in sc_counts.items():
+            vals = group_vals if isinstance(group_vals, tuple) else (group_vals,)
+            if any(pd.isna(v) for v in vals):
+                continue
+            group_label = '|'.join(str(v) for v in vals)
+            level_counts[group_label] = int(cnt)
+
+        dist[level_key] = level_dist
+        counts[level_key] = level_counts
+
+    return dist, counts
 
 
 def main():
@@ -134,6 +231,9 @@ def main():
                 "baseSeason": base_season,
                 "hierarchy": HIERARCHY,
             },
+            "category_size_dist": {lk: {} for lk, _ in CATEGORY_DIST_LEVELS},
+            "category_sample_count": {lk: {} for lk, _ in CATEGORY_DIST_LEVELS},
+            "ref_meta": {},
         }
     else:
 
@@ -171,6 +271,17 @@ def main():
         all_sizes = set(agg_current['SIZE_CD'].unique()) | set(agg_prev['SIZE_CD'].unique())
         size_order = sorted(all_sizes, key=_size_sort_key)
 
+        # 카테고리 분포 사전 집계 (정책 3 빈자리 채우기용 — 당해+전년 통합)
+        cat_dist, cat_counts = _compute_category_size_dist(df)
+
+        # ref_meta: PART_CD → {SESN_SUB_NM, FIT_INFO1} (ref 폴백용)
+        ref_meta = _build_ref_meta(df)
+
+        # NaN → None 변환 (표준 JSON 호환 — JavaScript JSON.parse 호환)
+        # astype(object)로 dtype 통일 후 None 대체 (float dtype에선 None이 NaN으로 되돌아감)
+        agg_current = agg_current.astype(object).where(pd.notna(agg_current), None)
+        agg_prev = agg_prev.astype(object).where(pd.notna(agg_prev), None)
+
         output = {
             "salesData": agg_current.to_dict(orient='records'),
             "prevData": agg_prev.to_dict(orient='records'),
@@ -180,16 +291,24 @@ def main():
                 "baseSeason": base_season,
                 "hierarchy": HIERARCHY,
             },
+            "category_size_dist": cat_dist,
+            "category_sample_count": cat_counts,
+            "ref_meta": ref_meta,
         }
 
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
+        # allow_nan=False — 표준 JSON 강제. NaN/Inf 발견 시 ValueError로 즉시 인지
+        json.dump(output, f, ensure_ascii=False, indent=2, allow_nan=False)
 
     print(f"  * salesData: {len(output['salesData'])}건")
     print(f"  * prevData: {len(output['prevData'])}건")
     print(f"  * colorMapping: {len(output.get('colorMapping', []))}건")
     print(f"  * sizeOrder: {output['meta']['sizeOrder']}")
+    print(f"  * categoryDist:")
+    for lk, _ in CATEGORY_DIST_LEVELS:
+        n_groups = len(output.get('category_size_dist', {}).get(lk, {}))
+        print(f"      {lk}: {n_groups}그룹")
     print(f"  * 저장 완료: {OUTPUT_PATH}")
     print("=" * 60)
 
