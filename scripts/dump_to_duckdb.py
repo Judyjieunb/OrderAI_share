@@ -136,6 +136,9 @@ CREATE TABLE IF NOT EXISTS order_recommendation_meta (
     PRIMARY KEY (brand_code, season_code)
 );
 
+-- Phase 3-1: SESN_SUB_NM/FIT_INFO1 컬럼 추가
+-- 1회성 마이그레이션은 이미 완료됨 (옛 13컬럼 → 새 15컬럼)
+-- 매 dump 시에는 _dump_size에서 brand_code 단위 DELETE 후 재 INSERT (다른 브랜드 데이터 보존)
 CREATE TABLE IF NOT EXISTS size_assortment (
     brand_code VARCHAR,
     season_code VARCHAR,
@@ -146,10 +149,23 @@ CREATE TABLE IF NOT EXISTS size_assortment (
     sub_cat_nm VARCHAR,
     item VARCHAR,
     item_nm VARCHAR,
+    sesn_sub_nm VARCHAR,   -- Phase 3-1: 서브시즌
+    fit_info1 VARCHAR,     -- Phase 3-1: 핏정보
     color_range VARCHAR,
     size_cd VARCHAR,
     order_qty INTEGER,
     sale_qty INTEGER
+);
+
+-- Phase 3-1: 카테고리 분포 / SC 카운트 / ref 메타 (정책 3 빈자리 채우기용)
+CREATE TABLE IF NOT EXISTS size_assortment_meta (
+    brand_code VARCHAR,
+    season_code VARCHAR,
+    category_size_dist JSON,      -- {by_l1: {group: {size: ratio}}, ...}
+    category_sample_count JSON,   -- {by_l1: {group: SC_count}, ...}
+    ref_meta JSON,                -- {PART_CD: {SESN_SUB_NM, FIT_INFO1}}
+    size_order JSON,              -- ['XS','S','M','L',...]
+    PRIMARY KEY (brand_code, season_code)
 );
 
 CREATE TABLE IF NOT EXISTS size_color_mapping (
@@ -180,6 +196,31 @@ CREATE INDEX IF NOT EXISTS idx_size_filters
 def _load_json(path: Path) -> dict:
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _ensure_size_assortment_schema(con) -> None:
+    """Phase 3-1 마이그레이션: size_assortment 가 구 스키마(<15컬럼)면 DROP + 재생성.
+
+    SCHEMA_DDL 의 CREATE TABLE IF NOT EXISTS 는 기존 테이블이 있으면 건너뛰므로,
+    구 스키마 (sesn_sub_nm/fit_info1 컬럼 없음) 가 살아남아 INSERT 시 컬럼 mismatch
+    에러가 발생하는 문제를 방지. 데이터는 dump 마다 brand 단위 DELETE+INSERT 패턴
+    이라 손실 없음 — 다음 dump 가 즉시 재생성. Idempotent: 신 스키마/fresh DB 면 noop.
+    """
+    # 테이블 존재 확인 (PRAGMA 는 테이블 없을 때 CatalogException 던짐 → fresh DB 보호)
+    exists = con.execute(
+        "SELECT 1 FROM information_schema.tables WHERE table_name = 'size_assortment'"
+    ).fetchone()
+    if not exists:
+        return  # fresh DB — SCHEMA_DDL 이 신 스키마로 생성
+
+    cols = con.execute("PRAGMA table_info('size_assortment')").fetchall()
+    if len(cols) < 15:  # sesn_sub_nm, fit_info1 미포함 = 구 스키마
+        logger.warning(
+            "size_assortment 구 스키마 감지 (%d컬럼 < 15) → DROP + 재생성. "
+            "데이터는 다음 dump 가 재생성합니다.",
+            len(cols),
+        )
+        con.execute("DROP TABLE IF EXISTS size_assortment")
 
 
 def _resolve_brand_season(args) -> tuple[str, str, str | None]:
@@ -425,15 +466,21 @@ def _dump_order_recommendation(con, brand: str, season: str, ors: dict) -> int:
 
 
 def _dump_size(con, brand: str, season: str, sa: dict) -> tuple[int, int]:
+    # 기존 데이터 정리 (스키마 변경 시 충돌 방지 + 중복 행 방지)
+    con.execute("DELETE FROM size_assortment WHERE brand_code=? AND season_code=?", [brand, season])
+    con.execute("DELETE FROM size_assortment_meta WHERE brand_code=? AND season_code=?", [brand, season])
+    con.execute("DELETE FROM size_color_mapping WHERE brand_code=? AND season_code=?", [brand, season])
+
     rows_size = 0
     for period_key, src_key in (("current", "salesData"), ("prev", "prevData")):
         for r in sa.get(src_key, []):
             con.execute(
-                "INSERT INTO size_assortment VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO size_assortment VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     brand, season, period_key,
                     r.get("SEX_NM"), r.get("CLASS2"), r.get("CAT_NM"),
                     r.get("SUB_CAT_NM"), r.get("ITEM"), r.get("ITEM_NM"),
+                    r.get("SESN_SUB_NM"), r.get("FIT_INFO1"),
                     r.get("COLOR_RANGE"), r.get("SIZE_CD"),
                     int(r.get("ORDER_QTY") or 0), int(r.get("SALE_QTY") or 0),
                 ],
@@ -447,6 +494,18 @@ def _dump_size(con, brand: str, season: str, sa: dict) -> tuple[int, int]:
             [brand, season, cm.get("컬러코드"), cm.get("컬러명"), cm.get("COLOR_RANGE")],
         )
         rows_color += 1
+
+    # Phase 3-1: 카테고리 분포 + ref_meta + sample_count + size_order 저장
+    con.execute(
+        "INSERT INTO size_assortment_meta VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            brand, season,
+            json.dumps(sa.get("category_size_dist", {}), ensure_ascii=False),
+            json.dumps(sa.get("category_sample_count", {}), ensure_ascii=False),
+            json.dumps(sa.get("ref_meta", {}), ensure_ascii=False),
+            json.dumps((sa.get("meta") or {}).get("sizeOrder", []), ensure_ascii=False),
+        ],
+    )
     return rows_size, rows_color
 
 
@@ -483,6 +542,10 @@ def main():
     con = duckdb.connect(str(db_path))
     try:
         con.execute("BEGIN")
+        # Phase 3-1: 기존 baseline DB 가 구 스키마 size_assortment 를 갖고 있으면
+        # CREATE TABLE IF NOT EXISTS 가 건너뛰어 INSERT 시 컬럼 mismatch 발생.
+        # 자동 마이그레이션 (idempotent — 신 스키마면 noop).
+        _ensure_size_assortment_schema(con)
         con.execute(SCHEMA_DDL)
         _delete_existing(con, brand, season)
         _upsert_brand(con, brand)
